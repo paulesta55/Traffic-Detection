@@ -7,11 +7,11 @@ from PIL import Image
 import pandas as pd
 from tqdm import tqdm
 
-#python .\traffic-detection.py --names_path=data\obj.names  --desc_path=FullIJCNN2013\ReadMe.txt --in_img_path=FullIJCNN2013 --out_img_path=data\obj --label_path=FullIJCNN2013\gt.txt
+#python .\traffic-detection.py --names_path=data\obj.names  --desc_path=FullIJCNN2013\ReadMe.txt --in_img_path=FullIJCNN2013 --out_img_path=data\obj --label_path=FullIJCNN2013\gt.txt --list_file_path=data\train.txt
 
 class DataLoader:
     
-    def __init__(self,names_path,desc_path,label_path,in_img_path,out_img_path,verbose):
+    def __init__(self,names_path,desc_path,label_path,in_img_path,out_img_path,verbose,list_file_path):
         self.verbose = verbose
         self.names_path = names_path
         self.desc_path = desc_path
@@ -20,7 +20,9 @@ class DataLoader:
         self.label_path = label_path
         self.gtsdb = pd.read_csv(os.path.abspath(label_path), sep=";", header=None,names=
                                  ["img", "x1", "y1", "x2", "y2","id"])
-        print(self.gtsdb.head())
+        self.list_file_path = list_file_path
+        if(self.verbose):
+            print(self.gtsdb.head())
         
     def __getitem__(self,idx):
         return {'img':self.load_image(idx),
@@ -64,10 +66,13 @@ class DataLoader:
    
     def convert_all(self):
         cache = []
-        for im in tqdm(self):
-            if(im['name'] not in cache):
-                self.ppm2jpg(im['img'],im['name'])
-                cache.append(im['name'])
+        with open(self.list_file_path,'w') as f:
+            for im in tqdm(self):
+                if(im['name'] not in cache):
+                    self.ppm2jpg(im['img'],im['name'])
+                    cache.append(im['name'])
+                    f.write(os.path.join('data','obj',im['name'])+'\n')
+
 
     
     def ppm2jpg(self,img,img_name):
@@ -116,10 +121,12 @@ def main():
     parser.add_argument('--in_img_path',  type=str,required=True,help='path of gtsdb ppm images directory')
     parser.add_argument('--out_img_path',  type=str,required=True,help='path of the output directory for images and label files')
     parser.add_argument('--verbose',  type=bool,required=False,help='path of the gtsdb gt.txt file',default=False)
+    parser.add_argument('--list_file_path',type=str,required=True,help='path of the output file containing the list of the examples')
     args = parser.parse_args()
     dataLoader = DataLoader(verbose=args.verbose,names_path=os.path.abspath(args.names_path),
         desc_path=os.path.abspath(args.desc_path),in_img_path=os.path.abspath(args.in_img_path),
-        out_img_path= os.path.abspath(args.out_img_path),label_path=os.path.abspath(args.label_path))
+        out_img_path= os.path.abspath(args.out_img_path),label_path=os.path.abspath(args.label_path),
+        list_file_path=os.path.abspath(args.list_file_path))
     dataLoader.convert_all()
     dataLoader.dump_all()
     dataLoader.dump_classes()
