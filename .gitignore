@@ -4,3 +4,4 @@ data/obj.names
 data/*.txt
 TrainIJCNN2013.zip
 TestIJCNN2013.zip
+.ipynb_checkpoints
