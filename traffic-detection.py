@@ -1,41 +1,60 @@
 import argparse
 import os
+import glob
 import re
-
 
 from PIL import Image
 import pandas as pd
+import cv2 as cv
+import copy as cp
+import numpy as np
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-#python .\traffic-detection.py --names_path=data\obj.names  --desc_path=FullIJCNN2013\ReadMe.txt --in_img_path=FullIJCNN2013 --out_img_path=data\obj --label_path=FullIJCNN2013\gt.txt --list_file_path=data\train.txt
+#python .\traffic-detection.py --names_path=data\obj.names  --desc_path=FullIJCNN2013\ReadMe.txt --in_img_path=FullIJCNN2013 --out_img_path=data\obj --label_path=FullIJCNN2013\gt.txt --list_file_dir=data
 
 class DataLoader:
     
-    def __init__(self,names_path,desc_path,label_path,in_img_path,out_img_path,verbose,list_file_path):
+    def __init__(self,names_path,desc_path,label_path,in_img_path,out_img_path,verbose,list_file_dir):
         self.verbose = verbose
         self.names_path = names_path
         self.desc_path = desc_path
         self.in_img_path = in_img_path
         self.out_img_path = out_img_path
         self.label_path = label_path
+        self.list_file_dir = list_file_dir
         self.gtsdb = pd.read_csv(os.path.abspath(label_path), sep=";", header=None,names=
                                  ["img", "x1", "y1", "x2", "y2","id"])
-        self.list_file_path = list_file_path
-        if(self.verbose):
-            print(self.gtsdb.head())
+        self.complete_dataset()
+        print(self.gtsdb.head())
         
-    def __getitem__(self,idx):
-        return {'img':self.load_image(idx),
-                'label':self.gtsdb.iloc[idx]['id'],
-                'name':self.gtsdb.iloc[idx]['img'],
-                'x1':self.gtsdb.iloc[idx]['x1'],
-               'x2':self.gtsdb.iloc[idx]['x2'],
-               'y1':self.gtsdb.iloc[idx]['y1'],
-                'y2':self.gtsdb.iloc[idx]['y2']}
+    def complete_dataset(self):
+        for file_name in glob.glob(os.path.join(self.in_img_path,'*.ppm')):
+            name = os.path.split(file_name)[-1]
+            if(name not in self.gtsdb.img.tolist()):
+                if(self.verbose):
+                    print(str.format("adding {0} to dataset",name))
+                image = Image.open(file_name)
+                self.gtsdb.loc[len(self)] = [name,None,None,None,None,None]
+            
+            
+        
+    def __getitem__(self,key):
+        if(isinstance(key,slice) ):
+            indices = key.indices(len(self))
+            return [self[ii] for ii in range(*indices)]
+        return {'img':self.load_image(key),
+                'label':self.gtsdb.iloc[key]['id'],
+                'name':self.gtsdb.iloc[key]['img'],
+                'x1':self.gtsdb.iloc[key]['x1'],
+               'x2':self.gtsdb.iloc[key]['x2'],
+               'y1':self.gtsdb.iloc[key]['y1'],
+                'y2':self.gtsdb.iloc[key]['y2']}
         
     def __len__(self):
         return len(self.gtsdb)
         
+    
     def load_image(self,idx):
         if(self.verbose):
             print("Loading image at {0}".format(self.gtsdb.iloc[idx]['img']))
@@ -66,14 +85,11 @@ class DataLoader:
    
     def convert_all(self):
         cache = []
-        with open(self.list_file_path,'w') as f:
-            for im in tqdm(self):
-                if(im['name'] not in cache):
-                    self.ppm2jpg(im['img'],im['name'])
-                    cache.append(im['name'])
-                    f.write(os.path.join('data','obj',im['name'])+'\n')
-
-
+        for im in tqdm(self):
+            if(im['name'] not in cache):
+                self.ppm2jpg(im['img'],im['name'])
+                cache.append(im['name'])
+                    
     
     def ppm2jpg(self,img,img_name):
         os.makedirs(self.out_img_path,exist_ok=True)
@@ -92,44 +108,72 @@ class DataLoader:
                'y_center':y_center,
                'width':width,
                'height':height}
+    
+
+    
+    def dump_split(self):
+        group_by_img = self.gtsdb.groupby('img')
+        count = 0
+        train_set = []
+        test_set = []
+        with open(os.path.join(self.list_file_dir,'train.txt'),'w') as train_file, open(os.path.join(self.list_file_dir,'test.txt'),'w') as test_file: 
+            for name,group in tqdm(group_by_img):
+                base_name=os.path.splitext(name)[0]
+                line = os.path.join(self.out_img_path,os.path.splitext(name)[0]+'.jpg')+'\n'
+                if(self.verbose):
+                    print(str.format("Appending line {0}",line))
+                if(int(base_name)<600):
+                    train_file.write(line)
+                else:
+                    test_file.write(line)
+                count += 1
+        return train_set,test_set
         
     def dump_all(self):
-        for img_name in tqdm(self.gtsdb.img):
+        for img_name in self.gtsdb.img:
             if(self.verbose):
                 print(img_name)
             with open(os.path.join(self.out_img_path,os.path.splitext(img_name)[0]+'.txt'),'w') as label_file:
                 for index, row in self.gtsdb.loc[self.gtsdb['img'] == img_name].iterrows():
-                    bb_coordinates = self.get_bb_coordinates(self[index])
-                    
-                    if(self.verbose):
-                        print(index)
-                        print(bb_coordinates)
-                    sep = ' '
-                    label_file.write(str(bb_coordinates['label'])+sep+str(bb_coordinates['x_center'])+sep+
-                                     str(bb_coordinates['y_center'])
-                                     +sep+str(bb_coordinates['width'])+sep+str(bb_coordinates['height'])+'\n')
-        
+                    example = self[index]
+                    if(example['label'] != None):
+                        bb_coordinates = self.get_bb_coordinates(example)
+                        if(self.verbose):
+                            print(index)
+                            print(bb_coordinates)
+                        sep = ' '
+                        label_file.write(str(bb_coordinates['label'])+sep+str(bb_coordinates['x_center'])+sep+
+                                         str(bb_coordinates['y_center'])
+                                         +sep+str(bb_coordinates['width'])+sep+str(bb_coordinates['height'])+'\n')
+ 
+    
+                
+
+
+
 
 
 def main():
     parser = argparse.ArgumentParser(description="Data loading for traffic sign detection. For instance use "
         +"python .\\traffic-detection.py --names_path=data\\obj.names  --desc_path=FullIJCNN2013\\ReadMe.txt"
- +"--in_img_path=FullIJCNN2013 --out_img_path=data\\obj --label_path=FullIJCNN2013\\gt.txt")
+ +"--in_img_path=FullIJCNN2013 --out_img_path=data\\obj --label_path=FullIJCNN2013\\gt.txt"
+ +" --list_file_dir=data")
     parser.add_argument('--names_path',type=str,required=True,help="path of the obj.names file required by yolo")
     parser.add_argument('--desc_path',  type=str,required=True,help='path of gtsdb ReadMe.txt file')
     parser.add_argument('--label_path',  type=str,required=True,help='path of the gtsdb gt.txt file')
     parser.add_argument('--in_img_path',  type=str,required=True,help='path of gtsdb ppm images directory')
     parser.add_argument('--out_img_path',  type=str,required=True,help='path of the output directory for images and label files')
     parser.add_argument('--verbose',  type=bool,required=False,help='path of the gtsdb gt.txt file',default=False)
-    parser.add_argument('--list_file_path',type=str,required=True,help='path of the output file containing the list of the examples')
+    parser.add_argument('--list_file_dir',type=str,required=True,help='path of the output file containing the list of the examples')
     args = parser.parse_args()
     dataLoader = DataLoader(verbose=args.verbose,names_path=os.path.abspath(args.names_path),
         desc_path=os.path.abspath(args.desc_path),in_img_path=os.path.abspath(args.in_img_path),
         out_img_path= os.path.abspath(args.out_img_path),label_path=os.path.abspath(args.label_path),
-        list_file_path=os.path.abspath(args.list_file_path))
+        list_file_dir=os.path.abspath(args.list_file_dir))
     dataLoader.convert_all()
     dataLoader.dump_all()
     dataLoader.dump_classes()
+    dataLoader.dump_split()
 
 
 if __name__ == '__main__':
