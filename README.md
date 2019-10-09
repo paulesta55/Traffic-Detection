@@ -11,5 +11,5 @@ $ chmod +x init.sh
 $ ./init.sh
 ```
 
-Since this script is downloads the whole GTSDB dataset and initializes [darknet submodule](https://github.com/AlexeyAB/darknet.git), 
+Since this script downloads the whole GTSDB dataset and initializes [darknet submodule](https://github.com/AlexeyAB/darknet.git), 
 it might take a few minutes
