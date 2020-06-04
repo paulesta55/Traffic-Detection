@@ -11,5 +11,8 @@ $ chmod +x init.sh
 $ ./init.sh
 ```
 
-Since this script downloads the whole **GTSDB dataset** and initializes [darknet submodule](https://github.com/AlexeyAB/darknet.git), 
+Since this script downloads the whole [GTSDB dataset](http://benchmark.ini.rub.de/?section=gtsdb&subsection=news) and initializes [darknet submodule](https://github.com/AlexeyAB/darknet.git), 
 it might take a few minutes
+
+* Preparing the data can be performed using **data-preparation.py** script
+* Training and running the network can be performed following AlexeyAB indications 
