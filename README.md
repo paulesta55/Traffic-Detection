@@ -16,7 +16,7 @@ it might take a few minutes
 
 * Preparing the data can be performed using **data-preparation.py** script
 * Training and running the network can be performed following AlexeyAB indications 
-
+* You can also check [this](cvaeForTrafficSigns.ipynb) cool notebook which generates fake traffic signs using a CVAE adapted from TF documentation
 ### References:
 
 This repo is using **AlexeyAB** repo and **YoloV3**
