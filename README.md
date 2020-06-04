@@ -17,5 +17,6 @@ it might take a few minutes
 * Preparing the data can be performed using **data-preparation.py** script
 * Training and running the network can be performed following AlexeyAB indications 
 
-References:
+### References:
+
 This repo is using **AlexeyAB** repo and **YoloV3**
